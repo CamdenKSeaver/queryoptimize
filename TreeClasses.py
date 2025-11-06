@@ -1,0 +1,193 @@
+import re
+class QuerySegment:
+    def __init__(self):
+        self.children =[]
+        self.parent=None
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}"
+    
+    def addChild(self,child):
+        self.children.append(child)
+        child.parent = self
+
+
+class Table(QuerySegment):
+    def __init__(self,tableName,alias=None):
+        super().__init__()
+        self.tableName =tableName
+        self.alias = alias if alias else tableName
+
+    
+    def __repr__(self):
+        if self.alias != self.tableName:
+            return f"{self.tableName} {self.alias}"
+        return self.tableName
+    
+
+
+
+class Where(QuerySegment):
+    def __init__(self, condition):
+        super().__init__()
+        self.condition = condition
+    
+
+    def __repr__(self):
+        return f"σ {self.condition}"
+    
+class Select(QuerySegment):
+    def __init__(self, attributes):
+        super().__init__()
+        self.attributes = attributes
+    
+    def __repr__(self):
+        attrs = ', '.join(self.attributes)
+        return f"π {attrs}"
+
+
+
+class CrossProduct(QuerySegment):
+    def __init__(self):
+        super().__init__()
+    def __repr__(self):
+        return "x"
+class Join(QuerySegment):
+
+    def __init__(self,condition =None):
+        super().__init__()
+        self.condition = condition
+    def __repr__(self):
+        if self.condition:
+            return f"⋈ {self.condition}"
+        return "⋈"
+    
+class QueryTree:
+    def __init__(self, root=None):
+        self.root = root
+    
+    def print_tree(self, node=None, prefix="", is_last=True):
+        if node is None:
+            node = self.root
+        
+        if node is None:
+            return
+        connector = "└── " if is_last else "├── "
+        print(prefix + connector + str(node))
+        if is_last:
+            new_prefix = prefix + "    "
+        else:
+            new_prefix = prefix + "│   "
+        
+
+
+        for i, child in enumerate(node.children):
+            is_last_child = (i == len(node.children) - 1)
+            self.print_tree(child, new_prefix, is_last_child)
+    
+
+
+#creates the first tree
+def canonicalTree(tables,query):
+    tableNames =[]
+    for table in query['from']:
+        tableNames.append(Table(table['table'],table['alias']))
+    currentNode = tableNames[0]
+    if len(tableNames) > 1:
+        #starts with the first two table to x and then it adds one at a time after for the formatiing
+        currentNode = CrossProduct()
+        currentNode.addChild(tableNames[0])
+        currentNode.addChild(tableNames[1])
+        for i in range(2, len(tableNames)):
+            nextCross = CrossProduct()
+            nextCross.addChild(currentNode)
+            nextCross.addChild(tableNames[i])
+            currentNode = nextCross
+    
+#add the where clause
+    if query["where"]:
+        finalWhere = ""
+        for i, where in enumerate(query["where"]):
+            finalWhere += where['condition']
+            if where['operator']:
+                finalWhere += f" {where['operator']} "
+        where = Where(finalWhere)
+        where.addChild(currentNode)
+        currentNode = where
+
+#select should be parent node
+    columns = []
+    for column in query['select']:
+        columns.append(column['attribute'])
+    select = Select(columns)
+    select.addChild(currentNode)
+
+    return QueryTree(select)
+
+#I apologize in advance, reading selection has always made me think of SELECT so I just say where so I dont get confused
+def stepsOneTwo(tree):
+    whereNode = tree.root.children[0]
+    combinedWhere = whereNode.condition
+    wheres = combinedWhere.split(' AND ')
+#like a basic leetcode problem just removing a node and pushing them up
+    crossProductRoot = whereNode.children[0]
+    tree.root.children[0] = crossProductRoot
+    crossProductRoot.parent = tree.root
+#grab what table aliases r used in the where statement to put it in the tree where both those tables r below in the tree
+    for where in wheres:
+        where = where.strip()
+        tablesUsed = re.findall(r'([A-Z_]+)\.', where)
+        if len(tablesUsed) ==1:
+            tableNode = getTableNode(tree.root, tablesUsed[0])
+            if tableNode:
+                insertNode(tableNode,where)
+        elif len(tablesUsed) >= 2:
+            targetNode = findLowestNodeWithTables(tree.root, tablesUsed)
+            if targetNode:
+                insertNode(targetNode, where)
+
+#helper recursive search down the tree to find where I need to put the Where statements
+def getTableNode(node,alias):
+    if isinstance(node, Table) and node.alias == alias:
+        return node
+    
+    for child in node.children:
+        result = getTableNode(child, alias)
+        if result:
+            return result
+    
+    return None
+
+def insertNode(tableNode, where):
+    newWhere = Where(where)
+    parent = tableNode.parent
+    for i, child in enumerate(parent.children):
+        if child == tableNode:
+            parent.children[i] = newWhere
+            break
+    newWhere.parent = parent
+    newWhere.addChild(tableNode)
+
+def findLowestNodeWithTables(node, tables):
+
+    found_here = None
+    for child in node.children:
+        found = findLowestNodeWithTables(child, tables)
+        if found:
+            return found
+    if isinstance(node, CrossProduct):
+        aliasesHere = getAliasesUnderNode(node)
+        if all(alias in aliasesHere for alias in tables):
+
+            found_here = node
+    return found_here
+
+
+def getAliasesUnderNode(node):
+    aliases = set()
+    if isinstance(node, Table):
+        aliases.add(node.alias)
+        
+    for child in node.children:
+        aliases.update(getAliasesUnderNode(child))
+    return aliases

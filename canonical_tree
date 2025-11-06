@@ -1,0 +1,17 @@
+// Query Tree
+digraph {
+	rankdir=TB
+	node_0 [label="π LNAME" shape=box]
+	node_1 [label="σ P.Pname=‘Aquarius’ AND P.Pnumber=W.Pno AND E.Essn=W.Ssn AND E.Bdate>’1957-12-31’" shape=box]
+	node_0 -> node_1
+	node_2 [label=x shape=box]
+	node_1 -> node_2
+	node_3 [label=x shape=box]
+	node_2 -> node_3
+	node_4 [label="EMPLOYEE E" shape=box]
+	node_3 -> node_4
+	node_5 [label="WORKS_ON W" shape=box]
+	node_3 -> node_5
+	node_6 [label="PROJECT P" shape=box]
+	node_2 -> node_6
+}
