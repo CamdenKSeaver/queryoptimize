@@ -1,28 +1,28 @@
-"""
-Test canonicalTree with input1.txt
-"""
-
 from QueryParser import parseFile
-from TreeClasses import canonicalTree,stepsOneTwo
+from TreeClasses import canonicalTree, stepsOneTwo, step3
 
-# Parse the input file
-print("Parsing input1.txt...\n")
+# Parse input
 tables, query = parseFile('input1.txt')
 
 # Build canonical tree
-print("Building canonical tree...\n")
-tree = canonicalTree(tables, query)
-
-print("\n" + "=" * 60)
+print("=" * 60)
 print("CANONICAL TREE:")
 print("=" * 60)
-canonical = canonicalTree(tables, query)
-canonical.print_tree()
+tree = canonicalTree(tables, query)
+tree.print_tree()
 
+# Apply steps 1 & 2
 print("\n" + "=" * 60)
-print("AFTER STEPS ONE & TWO:")
+print("AFTER STEPS 1 & 2 (Push selections down):")
 print("=" * 60)
-stepsOneTwo(canonical)
-canonical.print_tree()
+tree = stepsOneTwo(tree)
+tree.print_tree()
 
-print("\n✅ Done! Check canonical_tree.png")
+# Apply step 3
+print("\n" + "=" * 60)
+print("AFTER STEP 3 (Reorder by selectivity):")
+print("=" * 60)
+tree = step3(tree, tables, query)  
+tree.print_tree()
+
+print("\n✅ Done!")

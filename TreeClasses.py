@@ -124,6 +124,9 @@ def canonicalTree(tables,query):
 
     return QueryTree(select)
 
+#TODO:
+#WHEN IT IS LIKE OR (__AND____ AND___AND) the () needs to be one node instead of splitting them
+
 #I apologize in advance, reading selection has always made me think of SELECT so I just say where so I dont get confused
 def stepsOneTwo(tree):
     whereNode = tree.root.children[0]
@@ -145,6 +148,7 @@ def stepsOneTwo(tree):
             targetNode = findLowestNodeWithTables(tree.root, tablesUsed)
             if targetNode:
                 insertNode(targetNode, where)
+    return tree
 
 #helper recursive search down the tree to find where I need to put the Where statements
 def getTableNode(node,alias):
@@ -191,3 +195,86 @@ def getAliasesUnderNode(node):
     for child in node.children:
         aliases.update(getAliasesUnderNode(child))
     return aliases
+
+def step3(tree,tables,query):
+    wheres = []
+    getWheres(tree.root,wheres)
+    aliasMap = {}
+    for table in query['from']:
+            aliasMap[table['alias']] = table['table']
+    wheres = whereSelectivityOrder(wheres,tables,aliasMap)
+
+    whereNodes = []
+    xParents = []
+    for where in wheres:
+        tablesUsed = list(set(re.findall(r'([A-Z_]+)\.', where.condition)))
+        if len(tablesUsed) == 1:
+            whereNodes.append(where)
+        else:
+            xParents.append(where)
+    for where in whereNodes:
+        removeWhereNode(where)
+    
+    for where in whereNodes:
+        tablesUsed = re.findall(r'([A-Z_]+)\.', where.condition)
+        tableNode = getTableNode(tree.root, tablesUsed[0])
+        if tableNode:
+            insertNode(tableNode, where.condition)
+    
+    return tree
+
+#best is = with pk then = with unique then just =
+#then any range
+#then any disjunctive condition
+def selectivity(where,tables,aliasMap):
+    condition = re.search(r'([A-Z_]+)\.([A-Z_]+)',where)
+    alias = condition.group(1)
+    attribute = condition.group(2)
+    if 'OR' in where.upper():
+        return 5
+    tableName = aliasMap.get(alias, alias)
+    tableSchema = None
+    for table in tables:
+        if table['name'] == tableName:
+            tableSchema = table
+            break
+    if '=' in where and '>' not in where and '<' not in where and '!' not in where:
+        if attribute in tableSchema['primaryKeys']:
+            return 1
+        if attribute in tableSchema['uniqueKeys']:
+            return 2
+        return 3
+    
+    return 4
+    
+
+
+#just ordering them so I can move the the most selective ones first
+def whereSelectivityOrder(wheres,tables,aliasMap):
+    for where in wheres:
+        where.selectivity = selectivity(where.condition,tables,aliasMap)
+    wheres.sort(key=lambda w: w.selectivity)
+    return wheres
+
+
+def getWheres(node,wheres):
+    if isinstance(node,Where):
+        wheres.append(node)
+    for child in node.children:
+        getWheres(child,wheres)
+
+
+
+def removeWhereNode(whereNode):
+    child = whereNode.children[0] if whereNode.children else None
+    parent = whereNode.parent
+    
+
+    for i, c in enumerate(parent.children):
+        if c == whereNode:
+            
+            parent.children[i] = child
+            child.parent = parent
+            break
+    whereNode.parent = None
+    whereNode.children = []
