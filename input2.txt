@@ -1,0 +1,39 @@
+-- Schema with 4 tables
+Employee(
+  Ssn, Name, Age, Salary, Deptno,
+  PRIMARY KEY(Ssn),
+  UNIQUE(Name)
+);
+
+Department(
+  Deptno, Dname, Location, Budget,
+  PRIMARY KEY(Deptno)
+);
+
+Project(
+  Projno, Projname, Deptno, Status,
+  PRIMARY KEY(Projno),
+  UNIQUE(Projname)
+);
+
+Assignment(
+  Ssn, Projno, Hours, Role,
+  PRIMARY KEY(Ssn, Projno)
+);
+
+-- Complex Query with 4 tables and multiple ORs
+SELECT E.Name, P.Projname
+FROM  Department D, Project P, Assignment A,Employee E
+WHERE E.Age>30 
+  AND (E.Salary<50000 OR E.Age<25)
+  AND E.Ssn='123456789'
+  AND E.Name='John'
+  AND E.Deptno=D.Deptno
+  AND D.Budget>100000
+  AND (E.Name='Alice' OR D.Location='NYC')
+  AND P.Deptno=D.Deptno
+  AND P.Status='Active'
+  AND (E.Salary>80000 OR D.Budget>200000 OR P.Status='Critical')
+  AND A.Ssn=E.Ssn
+  AND A.Projno=P.Projno
+  AND A.Hours>40;

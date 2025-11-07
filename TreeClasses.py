@@ -139,7 +139,7 @@ def stepsOneTwo(tree):
 #grab what table aliases r used in the where statement to put it in the tree where both those tables r below in the tree
     for where in wheres:
         where = where.strip()
-        tablesUsed = re.findall(r'([A-Z_]+)\.', where)
+        tablesUsed = list(set(re.findall(r'([A-Z_]+)\.', where)))
         if len(tablesUsed) ==1:
             tableNode = getTableNode(tree.root, tablesUsed[0])
             if tableNode:
@@ -161,7 +161,7 @@ def getTableNode(node,alias):
             return result
     
     return None
-
+#place node in the tree
 def insertNode(tableNode, where):
     newWhere = Where(where)
     parent = tableNode.parent
@@ -172,6 +172,7 @@ def insertNode(tableNode, where):
     newWhere.parent = parent
     newWhere.addChild(tableNode)
 
+#helper to find the lowest node in the tree that has the tables that the where condition has underneath it
 def findLowestNodeWithTables(node, tables):
 
     found_here = None
@@ -186,7 +187,7 @@ def findLowestNodeWithTables(node, tables):
             found_here = node
     return found_here
 
-
+#get all the tables aliases under the node
 def getAliasesUnderNode(node):
     aliases = set()
     if isinstance(node, Table):
@@ -206,6 +207,7 @@ def step3(tree,tables,query):
 
     whereNodes = []
     xParents = []
+    #grab the tables in the where condition to find where to place it in the tree
     for where in wheres:
         tablesUsed = list(set(re.findall(r'([A-Z_]+)\.', where.condition)))
         if len(tablesUsed) == 1:
@@ -214,7 +216,7 @@ def step3(tree,tables,query):
             xParents.append(where)
     for where in whereNodes:
         removeWhereNode(where)
-    
+    #insert node where the table node is with the where
     for where in whereNodes:
         tablesUsed = re.findall(r'([A-Z_]+)\.', where.condition)
         tableNode = getTableNode(tree.root, tablesUsed[0])
@@ -244,6 +246,8 @@ def selectivity(where,tables,aliasMap):
         if attribute in tableSchema['uniqueKeys']:
             return 2
         return 3
+    if '<>' in where:
+        return 5
     
     return 4
     
@@ -278,3 +282,50 @@ def removeWhereNode(whereNode):
             break
     whereNode.parent = None
     whereNode.children = []
+#turn into joins which was actully 100x easier than the others
+def step4(tree):
+    crossProducts = []
+    findCrossProducts(tree.root,crossProducts)
+    for x in crossProducts:
+        #going to assume my earlier code works right so any parent of a x that is a where should be good to go
+        if isinstance(x.parent,Where):
+            #swap out x for join and make sure parents and children transfer right
+            condition = x.parent.condition
+            join = Join(condition)
+            whereParent = x.parent.parent
+            whereParent.children[0] = join
+            join.parent = whereParent
+            join.children = x.children[:]
+            for child in join.children:
+                child.parent = join
+
+    return tree
+            
+            
+
+
+
+#helper step4 recursive search thru tree for x
+def findCrossProducts(node, crossProducts):
+    if isinstance(node, CrossProduct):
+        crossProducts.append(node)
+    for child in node.children:
+        findCrossProducts(child, crossProducts)
+
+
+#so i realized i need to combine the wheres
+def combineWheres(node):
+    if not node.children:
+        return
+    while isinstance(node,Where) and isinstance(node.children[0],Where):
+        child = node.children[0]
+        combinedWhere = f"({node.condition}) AND ({child.condition})"
+        node.condition = combinedWhere
+
+        node.children = child.children
+        for parent in node.children:
+            parent.parent = node
+        
+    for child in node.children:
+        combineWheres(child)
+
