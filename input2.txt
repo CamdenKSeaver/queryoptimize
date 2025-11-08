@@ -1,39 +1,52 @@
--- Schema with 4 tables
-Employee(
-  Ssn, Name, Age, Salary, Deptno,
-  PRIMARY KEY(Ssn),
-  UNIQUE(Name)
+-- Complex test with 6 tables - guarantees all steps show different trees
+-- Schema Definitions
+Customer(
+  Cid, Cname, City, Age,
+  PRIMARY KEY(Cid)
 );
 
-Department(
-  Deptno, Dname, Location, Budget,
-  PRIMARY KEY(Deptno)
+Orders(
+  Oid, Odate, Cid, Total,
+  PRIMARY KEY(Oid),
+  UNIQUE(Odate)
 );
 
-Project(
-  Projno, Projname, Deptno, Status,
-  PRIMARY KEY(Projno),
-  UNIQUE(Projname)
+Product(
+  Pid, Pname, Price, Category,
+  PRIMARY KEY(Pid),
+  UNIQUE(Pname)
 );
 
-Assignment(
-  Ssn, Projno, Hours, Role,
-  PRIMARY KEY(Ssn, Projno)
+OrderLine(
+  Oid, Pid, Quantity,
+  PRIMARY KEY(Oid, Pid)
 );
 
--- Complex Query with 4 tables and multiple ORs
-SELECT E.Name, P.Projname
-FROM  Department D, Project P, Assignment A,Employee E
-WHERE E.Age>30 
-  AND (E.Salary<50000 OR E.Age<25)
-  AND E.Ssn='123456789'
-  AND E.Name='John'
-  AND E.Deptno=D.Deptno
-  AND D.Budget>100000
-  AND (E.Name='Alice' OR D.Location='NYC')
-  AND P.Deptno=D.Deptno
-  AND P.Status='Active'
-  AND (E.Salary>80000 OR D.Budget>200000 OR P.Status='Critical')
-  AND A.Ssn=E.Ssn
-  AND A.Projno=P.Projno
-  AND A.Hours>40;
+Supplier(
+  Sid, Sname, Country,
+  PRIMARY KEY(Sid)
+);
+
+Supply(
+  Sid, Pid, Cost,
+  PRIMARY KEY(Sid, Pid)
+);
+
+-- SQL Query with 6 tables, multiple join paths, range conditions, and OR
+SELECT C.Cname, P.Pname, SUM(L.Quantity) AS TotalQty, AVG(O.Total) AS AvgTotal
+FROM Customer C, Orders O, Product P, OrderLine L, Supplier S, Supply Sup
+WHERE C.Cid = O.Cid
+  AND O.Oid = L.Oid
+  AND L.Pid = P.Pid
+  AND P.Pid = Sup.Pid
+  AND Sup.Sid = S.Sid
+  AND P.Pname = 'Laptop'
+  AND C.Age > 25
+  AND C.Age <= 65
+  AND O.Total >= 1000
+  AND P.Price < 2000
+  AND (S.Country = 'USA' OR S.Country = 'Canada')
+  AND Sup.Cost <> 0
+GROUP BY C.Cname, P.Pname
+HAVING SUM(L.Quantity) > 10
+ORDER BY TotalQty DESC;

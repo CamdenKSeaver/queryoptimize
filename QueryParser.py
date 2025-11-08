@@ -48,7 +48,7 @@ def parseFile(filename):
         tableDefinition= schemaPart[tableStart:closeParenIdx+ 1]
         
         startParen = tableDefinition.find('(')
-        tableName = tableDefinition[:startParen].strip().upper()
+        tableName = tableDefinition[:startParen].strip()
         
         endParen = tableDefinition.rfind(')')
         tableContent = tableDefinition[startParen+1:endParen]
@@ -59,7 +59,7 @@ def parseFile(filename):
             keysString = primaryKeyMatch.group(1)
             keysList = keysString.split(',')
             for key in keysList:
-                primaryKeys.append(key.strip().upper())
+                primaryKeys.append(key.strip())
             tableContent = re.sub(r',?\s*PRIMARY\s+KEY\s*\([^)]+\)', '', tableContent, flags=re.IGNORECASE)
         
         uniqueKeys = []
@@ -68,7 +68,7 @@ def parseFile(filename):
             keysString = uniqueKeyMatch.group(1)
             keysList = keysString.split(',')
             for key in keysList:
-                uniqueKeys.append(key.strip().upper())
+                uniqueKeys.append(key.strip())
             tableContent = re.sub(r',?\s*UNIQUE\s*\([^)]+\)', '', tableContent, flags=re.IGNORECASE)
         
         #grab each attribute from comma seperated syntasx
@@ -77,7 +77,7 @@ def parseFile(filename):
         for attribute in attributeList:
             cleanAttribute = attribute.strip()
             if cleanAttribute:
-                attributes.append(cleanAttribute.upper())
+                attributes.append(cleanAttribute)
         
         tableInfo = {
             'name': tableName,
@@ -101,9 +101,9 @@ def parseFile(filename):
 
 
 def parseQuery(content):
+
     selectIndex = content.upper().find('SELECT')
     queryPart = content[selectIndex:]
-    
     query = {
         'select': [],
         'from': [],
@@ -113,24 +113,25 @@ def parseQuery(content):
         'orderBy': None
     }
     
-    # Find WHERE position (or end of query)
+
+
+    
     whereIdx = queryPart.upper().find('WHERE')
     groupByIdx = queryPart.upper().find('GROUP BY')
     havingIdx = queryPart.upper().find('HAVING')
     orderByIdx = queryPart.upper().find('ORDER BY')
     
-    # Parse SELECT - everything between SELECT and FROM
+
     fromIdx = queryPart.upper().find('FROM')
-    selectClause = queryPart[6:fromIdx].strip()  # 6 = len('SELECT')
-    
+    selectClause = queryPart[6:fromIdx].strip() 
+    #grab all the attributes should be separted by commas
     selectParts = selectClause.split(',')
     for part in selectParts:
         part = part.strip()
         
-        # Check if it has aggregation function like SUM(Salary)
         if '(' in part and ')' in part:
             funcStart = part.find('(')
-            funcName = part[:funcStart].strip().upper()
+            funcName = part[:funcStart].strip()
             argStart = part.find('(') + 1
             argEnd = part.find(')')
             argument = part[argStart:argEnd].strip()
@@ -140,11 +141,10 @@ def parseQuery(content):
                 'argument': argument
             })
         else:
-            # Regular attribute like E.Lname
             if '.' in part:
                 dotIdx = part.find('.')
-                tablePart = part[:dotIdx].strip().upper()
-                attrPart = part[dotIdx+1:].strip().upper()
+                tablePart = part[:dotIdx].strip()
+                attrPart = part[dotIdx+1:].strip()
                 query['select'].append({
                     'table': tablePart,
                     'attribute': attrPart
@@ -152,10 +152,10 @@ def parseQuery(content):
             else:
                 query['select'].append({
                     'table': None,
-                    'attribute': part.upper()
+                    'attribute': part
                 })
     
-    # Parse FROM everything between FROM and WHERE 
+#grab from the from to the where
     fromStart = fromIdx + 4
     if whereIdx != -1:
         fromEnd = whereIdx
@@ -168,25 +168,23 @@ def parseQuery(content):
     
     fromClause = queryPart[fromStart:fromEnd].strip()
     fromParts = fromClause.split(',')
-    
+    #grab each alias and table for each schema
     for part in fromParts:
         part = part.strip()
-        # Split by space to get table and alias
         tokens = part.split()
         if len(tokens) == 2:
             query['from'].append({
-                'table': tokens[0].upper(),
-                'alias': tokens[1].upper()
+                'table': tokens[0],
+                'alias': tokens[1]
             })
         elif len(tokens) == 1:
             query['from'].append({
-                'table': tokens[0].upper(),
-                'alias': tokens[0].upper()
+                'table': tokens[0],
+                'alias': tokens[0]
             })
     
- # Parse WHERE - everything between WHERE and next clause
     if whereIdx != -1:
-        whereStart = whereIdx + 5  # 5 = len('WHERE')
+        whereStart = whereIdx + 5
         if groupByIdx != -1:
             whereEnd = groupByIdx
         elif havingIdx != -1:
@@ -197,47 +195,38 @@ def parseQuery(content):
             whereEnd = len(queryPart)
         
         whereClause = queryPart[whereStart:whereEnd].strip()
-        # Remove semicolon if present
         if whereClause.endswith(';'):
             whereClause = whereClause[:-1].strip()
-        
-        # Remove newlines and extra spaces
         whereClause = ' '.join(whereClause.split())
         
-        # Parse conditions with their operators
+
         whereUpper = whereClause.upper()
         conditions = []
         lastIdx = 0
         
         while lastIdx < len(whereClause):
-            # Find next AND or OR
             andIdx = whereUpper.find(' AND ', lastIdx)
             orIdx = whereUpper.find(' OR ', lastIdx)
             
-            # Determine which comes first
             if andIdx == -1 and orIdx == -1:
-                # No more operators, this is the last condition
                 conditions.append({
                     'condition': whereClause[lastIdx:].strip(),
                     'operator': None
                 })
                 break
             elif andIdx == -1:
-                # Only OR found
                 conditions.append({
                     'condition': whereClause[lastIdx:orIdx].strip(),
                     'operator': 'OR'
                 })
-                lastIdx = orIdx + 4  # Move past ' OR '
+                lastIdx = orIdx + 4 
             elif orIdx == -1:
-                # Only AND found
                 conditions.append({
                     'condition': whereClause[lastIdx:andIdx].strip(),
                     'operator': 'AND'
                 })
-                lastIdx = andIdx + 5  # Move past ' AND '
+                lastIdx = andIdx + 5
             else:
-                # Both found, use whichever comes first
                 if andIdx < orIdx:
                     conditions.append({
                         'condition': whereClause[lastIdx:andIdx].strip(),
@@ -252,10 +241,9 @@ def parseQuery(content):
                     lastIdx = orIdx + 4
         
         query['where'] = conditions
-    
-    # Parse GROUP BY
+#group by parse
     if groupByIdx != -1:
-        groupByStart = groupByIdx + 8  # 8 = len('GROUP BY')
+        groupByStart = groupByIdx + 8 
         if havingIdx != -1:
             groupByEnd = havingIdx
         elif orderByIdx != -1:
@@ -269,8 +257,7 @@ def parseQuery(content):
         
         columns = groupByClause.split(',')
         query['groupBy'] = [col.strip() for col in columns]
-    
-    # Parse HAVING
+    #having parse
     if havingIdx != -1:
         havingStart = havingIdx + 6 
         if orderByIdx != -1:
@@ -284,7 +271,7 @@ def parseQuery(content):
         
         query['having'] = havingClause
     
-    # Parse ORDER BY
+#order by parse
     if orderByIdx != -1:
         orderByStart = orderByIdx + 8
         orderByEnd = len(queryPart)
@@ -310,6 +297,7 @@ def parseQuery(content):
                     'attribute': attribute,
                     'direction': 'ASC'
                 })
+        #should be defaulted to asc
             else:
                 query['orderBy'].append({
                     'attribute': part,
@@ -320,19 +308,3 @@ def parseQuery(content):
 
 tables, query = parseFile('input1.txt')
 
-print("=" * 60)
-print("TABLES:")
-print("=" * 60)
-for table in tables:
-    print(f"{table['name']}: {table['attributes']}")
-    print(f"  PK: {table['primaryKeys']}, UK: {table['uniqueKeys']}")
-
-print("\n" + "=" * 60)
-print("QUERY:")
-print("=" * 60)
-print(f"SELECT: {query['select']}")
-print(f"FROM: {query['from']}")
-print(f"WHERE: {query['where']}")
-print(f"GROUP BY: {query['groupBy']}")
-print(f"HAVING: {query['having']}")
-print(f"ORDER BY: {query['orderBy']}")
